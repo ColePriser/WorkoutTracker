@@ -1,0 +1,19 @@
+{
+  "name": "cpriser-cs348-project",
+  "version": "1.0.0",
+  "description": "## Overview The cpriser-cs348-project is a comprehensive application designed to demonstrate the integration of client and server components. This project serves as a practical example for understanding client-server architecture and the interactions between the two.",
+  "main": "server/server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mongodb": "^6.12.0",
+    "mongoose": "^8.9.5"
+  }
+}
