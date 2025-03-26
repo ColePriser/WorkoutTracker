@@ -2,8 +2,12 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+
+// Import models
 const Workout = require('./models/Workout');
-const WorkoutSet = require('./models/WorkoutSet');
+const Set = require('./models/Set');
+const Exercise = require('./models/Exercise');
+const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -13,7 +17,6 @@ app.use(express.json());
 
 // Connect to MongoDB Atlas
 const uri = "mongodb+srv://colepriser:Lgwhic7kqcpCmHlM@cluster0.iriij.mongodb.net/gymDatabase?retryWrites=true&w=majority&appName=Cluster0";
-
 mongoose.connect(uri)
     .then(() => console.log('Connected to MongoDB Atlas'))
     .catch(err => console.error('MongoDB Atlas connection error:', err));
@@ -43,7 +46,7 @@ app.post('/api/workouts', async (req, res) => {
       // For each exercise, create the sets referencing this workout
       for (let ex of exercisesInWorkout) {
         for (let s of ex.sets) {
-          await WorkoutSet.create({
+          await Set.create({
             workout_id: newWorkout._id,
             exercise_id: ex.exercise_id,
             set_number: s.set_number,
@@ -70,12 +73,12 @@ app.post('/api/workouts', async (req, res) => {
       await Workout.findByIdAndUpdate(id, { workout_date });
   
       // Remove old sets referencing this workout
-      await WorkoutSet.deleteMany({ workout_id: id });
+      await Set.deleteMany({ workout_id: id });
   
       // Insert new sets
       for (let ex of exercisesInWorkout) {
         for (let s of ex.sets) {
-          await WorkoutSet.create({
+          await Set.create({
             workout_id: id,
             exercise_id: ex.exercise_id,
             set_number: s.set_number,
@@ -99,7 +102,7 @@ app.post('/api/workouts', async (req, res) => {
       // Remove the main workout doc
       await Workout.findByIdAndDelete(id);
       // Remove all sets referencing this workout
-      await WorkoutSet.deleteMany({ workout_id: id });
+      await Set.deleteMany({ workout_id: id });
   
       res.json({ message: 'Workout deleted successfully!' });
     } catch (err) {
