@@ -1,12 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, useEffect } from 'react';
 import LogWorkout from './components/LogWorkout';
 
 function App() {
   return (
     <div>
-      <h1>Hello World from React!</h1>
+      <h1>Gym Workout Tracker</h1>
       <LogWorkout />
     </div>
   );
