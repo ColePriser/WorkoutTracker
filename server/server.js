@@ -22,14 +22,69 @@ mongoose.connect(uri)
     .catch(err => console.error('MongoDB Atlas connection error:', err));
 
 // Return static array of exercises to populate the dropdown in "LogWorkout"
-app.get('/api/exercises', (req, res) => {
-    // Hard coded sample for testing
-    const exercises = [
-        { exercise_id: 1, exercise_name: 'Bench Press' },
-        { exercise_id: 2, exercise_name: 'Squat' },
-        { exercise_id: 3, exercise_name: 'Deadlift' },
-    ];
-    res.json(exercises);
+app.get('/api/exercises', async (req, res) => {
+    try {
+      const exercises = await Exercise.find({}).lean();
+      res.json(exercises);
+    } catch (err) {
+      console.error('Error fetching exercises:', err);
+      res.status(500).json({ error: 'Failed to fetch exercises' });
+    }
+});
+
+// Create a new exercise
+app.post('/api/exercises', async (req, res) => {
+  try {
+    const { exercise_name } = req.body;
+    if (!exercise_name) {
+      return res.status(400).json({ error: 'exercise_name is required' });
+    }
+    // Insert using your Mongoose Exercise model
+    const exercise = await Exercise.create({ exercise_name });
+    res.status(201).json(exercise);
+  } catch (err) {
+    console.error('Error creating exercise:', err);
+    res.status(500).json({ error: 'Failed to create exercise' });
+  }
+});
+
+// GET all Workouts
+app.get('/api/workouts', async (req, res) => {
+  try {
+    // Load all workouts
+    const workouts = await Workout.find({}).lean();
+
+    // For each workout, fetch sets
+    for (const w of workouts) {
+      const sets = await Set.find({ workout_id: w._id }).lean();
+      
+      // Group sets by exercise_id so you can build "exercisesInWorkout"
+      w.exercisesInWorkout = [];
+      const exerciseMap = {};
+      for (const s of sets) {
+        if (!exerciseMap[s.exercise_id]) {
+          const exercise = await Exercise.findById(s.exercise_id).lean();
+          exerciseMap[s.exercise_id] = {
+            exercise_id: s.exercise_id,
+            exercise_name: exercise.exercise_name,
+            sets: [],
+          };
+        }
+        exerciseMap[s.exercise_id].sets.push({
+          set_number: s.set_number,
+          reps: s.reps,
+          weight_lbs: s.weight_lbs,
+        });
+      }
+
+      w.exercisesInWorkout = Object.values(exerciseMap);
+    }
+
+    res.json(workouts);
+  } catch (err) {
+    console.error('Error fetching workouts:', err);
+    res.status(500).json({ error: 'Failed to fetch workouts' });
+  }
 });
 
 // CREATE a Workout + its Sets

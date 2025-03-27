@@ -1,47 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-function LogWorkout() {
-  // Hard-coded date and exercise data for demo purposes
-  const [workoutDate, setWorkoutDate] = useState('2025-04-01'); 
+const LogWorkout = forwardRef(function LogWorkout(props, ref) {
+  const { onWorkoutSaved } = props;
+  const [workoutDate, setWorkoutDate] = useState(''); 
   const [exercisesList, setExercisesList] = useState([]);
   const [selectedExerciseId, setSelectedExerciseId] = useState('');
   const [exercisesInWorkout, setExercisesInWorkout] = useState([]);
   const [currentWorkoutId, setCurrentWorkoutId] = useState('');
 
-  const userId = 1; // Assume user ID 1 for now
+  // Create new exercise state
+  const [showExerciseForm, setShowExerciseForm] = useState(false);
+  const [newExerciseName, setNewExerciseName] = useState('');
+
+  // Hard code userID for testing
+  const userId = 1;
 
 
   // Fetch the Exercises from the Server
   useEffect(() => {
-    fetch('http://localhost:5000/api/exercises')
-      .then((res) => res.json())
-      .then((data) => {
-        setExercisesList(data); // e.g. [{exercise_id:1, exercise_name:'Bench Press'}, ...]
-      })
-      .catch((err) => {
-        console.error('Error fetching exercises:', err);
-      });
+    fetchExercises();
   }, []);
 
+  const fetchExercises = () => {
+    fetch('http://localhost:5000/api/exercises')
+      .then((res) => res.json())
+      .then(data => setExercisesList(data))
+      .catch((err) => console.error('Error fetching exercises:', err));
+  };
 
-  // Handlers to Add/Remove Exercises
+  // Show/hide new exercise form
+  const handleCreateExercise = () => {
+    setShowExerciseForm(!showExerciseForm);
+  };
+
+  // Save new exercise
+  const handleSaveNewExercise = () => {
+    if (!newExerciseName) return;
+    fetch('http://localhost:5000/api/exercises', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exercise_name: newExerciseName }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log('Exercise created:', data);
+        alert('Exercise "${data.exercise_name}" created!');
+        fetchExercises();
+        // reset the form
+        setShowExerciseForm(false);
+        setNewExerciseName('');
+      })
+      .catch((err) => console.error('Error creating exercise:', err));
+  };
+
+
+  // Handlers to add/remove exercises in workout
   const handleAddExercise = () => {
     if (!selectedExerciseId) return;
-
-    // Find the selected exercise object
     const exerciseObj = exercisesList.find(
-      (ex) => ex.exercise_id === parseInt(selectedExerciseId, 10)
-    );
+      (ex) => ex._id === selectedExerciseId);
     if (!exerciseObj) return;
 
-    // Add exercise to the workout with an empty sets array
-    const newExerciseEntry = {
-      exercise_id: exerciseObj.exercise_id,
-      exercise_name: exerciseObj.exercise_name,
-      sets: [],
-    };
-
-    setExercisesInWorkout((prev) => [...prev, newExerciseEntry]);
+    setExercisesInWorkout((prev) => [
+      ...prev, 
+      {
+        exercise_id: exerciseObj._id,
+        exercise_name: exerciseObj.exercise_name,
+        sets: [],
+      }
+    ]);
     setSelectedExerciseId(''); // reset dropdown
   };
 
@@ -49,14 +76,12 @@ function LogWorkout() {
     setExercisesInWorkout((prev) => prev.filter((_, i) => i !== index));
   };
 
-
   // Handlers for Sets
   const handleAddSet = (exIndex) => {
     setExercisesInWorkout((prev) => {
       const updated = [...prev];
-      const exercise = updated[exIndex];
-      exercise.sets.push({
-        set_number: exercise.sets.length + 1,
+      updated[exIndex].sets.push({
+        set_number: updated[exIndex].sets.length + 1,
         reps: 0,
         weight_lbs: 0,
       });
@@ -81,19 +106,27 @@ function LogWorkout() {
     });
   };
 
+  // Reset log workout form once workout is saved
+  const resetForm = () => {
+    setCurrentWorkoutId('');
+    setWorkoutDate('');
+    setExercisesInWorkout([]);
+    setSelectedExerciseId('');
+  };
+
 
   // Save or Edit the Workout
-  
   const handleSaveWorkout = () => {
     // Build request body
     const payload = {
       user_id: userId,
       workout_date: workoutDate,
-      exercisesInWorkout: exercisesInWorkout,
+      exercisesInWorkout,
     };
 
     // If we have an ID, we edit the existing workout; otherwise create a new one
     if (currentWorkoutId) {
+      // Edit existing workout
       fetch(`http://localhost:5000/api/workouts/${currentWorkoutId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -103,9 +136,12 @@ function LogWorkout() {
         .then((data) => {
           console.log('Workout updated:', data);
           alert('Workout updated!');
+          resetForm();
+          if (onWorkoutSaved) onWorkoutSaved(); // refresh history
         })
         .catch((err) => console.error('Error updating workout:', err));
     } else {
+      // Create new workout
       fetch('http://localhost:5000/api/workouts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -115,7 +151,8 @@ function LogWorkout() {
         .then((data) => {
           console.log('Workout created:', data);
           alert('Workout created!');
-          setCurrentWorkoutId(data.workout_id); // so we can "edit" afterwards
+          resetForm();
+          if (onWorkoutSaved) onWorkoutSaved(); // refresh history
         })
         .catch((err) => console.error('Error creating workout:', err));
     }
@@ -123,7 +160,6 @@ function LogWorkout() {
 
 
   // Delete the Workout
-
   const handleDeleteWorkout = () => {
     if (!currentWorkoutId) {
       alert('No workout to delete!');
@@ -144,19 +180,52 @@ function LogWorkout() {
         setCurrentWorkoutId(null);
         setWorkoutDate('');
         setExercisesInWorkout([]);
+        if (onWorkoutSaved) onWorkoutSaved(); // refresh
       })
       .catch((err) => console.error('Error deleting workout:', err));
   };
 
+  // Load workout into form for editing
+  const loadWorkout = (workout) => {
+    setCurrentWorkoutId(workout._id || '');
+    if (workout.workout_date) {
+      setWorkoutDate(workout.workout_date.split('T')[0]); // if stored as full date string
+    } else {
+      setWorkoutDate('');
+    }
+    // transform workout.exercisesInWorkout into the shape we need
+    setExercisesInWorkout(workout.exercisesInWorkout || []);
+  };
+
+  useImperativeHandle(ref, () => ({
+    loadWorkout
+  }));
+
 
   // Render the UI
-
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-      <h2>{currentWorkoutId ? 'Edit Workout' : 'Log Workout'}</h2>
+    <div style={{ border: '1px solid #ccc', padding: '1rem' }}>
+      <h2>Log Workout</h2>
 
-      {/* Date Input */}
-      <label>
+      {/* Create New Exercise */}
+      <button onClick={handleCreateExercise}>
+        {showExerciseForm ? 'Cancel' : 'Create New Exercise'}
+      </button>
+      {showExerciseForm && (
+        <div style={{ marginTop: '1rem' }}>
+          <input
+            type="text"
+            placeholder="Exercise name"
+            value={newExerciseName}
+            onChange={(e) => setNewExerciseName(e.target.value)}
+          />
+          <button onClick={handleSaveNewExercise}>Save Exercise</button>
+        </div>
+      )}
+
+      <hr />
+
+      <label style={{ display: 'block', marginTop: '1rem' }}>
         Workout Date:
         <input
           type="date"
@@ -166,7 +235,6 @@ function LogWorkout() {
         />
       </label>
 
-      {/* Dropdown to Add Exercises */}
       <div style={{ marginTop: '1rem' }}>
         <select
           value={selectedExerciseId}
@@ -174,7 +242,7 @@ function LogWorkout() {
         >
           <option value="">-- Select an exercise --</option>
           {exercisesList.map((ex) => (
-            <option key={ex.exercise_id} value={ex.exercise_id}>
+            <option key={ex._id} value={ex._id}>
               {ex.exercise_name}
             </option>
           ))}
@@ -184,94 +252,60 @@ function LogWorkout() {
         </button>
       </div>
 
-      {/* List of Exercises in the Workout */}
-      {exercisesInWorkout.map((exercise, exIndex) => (
-        <div
-          key={exIndex}
-          style={{
-            border: '1px solid #ccc',
-            padding: '1rem',
-            marginTop: '1rem',
-          }}
-        >
+      {exercisesInWorkout.map((exObj, exIndex) => (
+        <div key={exIndex} style={{ border: '1px solid #999', margin: '1rem 0', padding: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <strong>{exercise.exercise_name}</strong>
-            <button onClick={() => handleRemoveExercise(exIndex)}>
-              Remove Exercise
-            </button>
+            <strong>{exObj.exercise_name}</strong>
+            <button onClick={() => handleRemoveExercise(exIndex)}>Remove</button>
           </div>
-
-          {/* Table of Sets */}
-          <table style={{ width: '100%', marginTop: '0.5rem' }}>
+          <table style={{ width: '100%', marginTop: '0.5rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th>Set #</th>
-                <th>Reps</th>
-                <th>Weight (lbs)</th>
+                <th style={{ textAlign: 'center' }}>Set #</th>
+                <th style={{ textAlign: 'center' }}>Reps</th>
+                <th style={{ textAlign: 'center' }}>Weight (lbs)</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {exercise.sets.map((setObj, setIndex) => (
+              {exObj.sets.map((s, setIndex) => (
                 <tr key={setIndex}>
-                  <td>{setObj.set_number}</td>
-                  <td>
+                  <td style={{ textAlign: 'center' }}>{s.set_number}</td>
+                  <td style={{ textAlign: 'center' }}>
                     <input
                       type="number"
-                      value={setObj.reps}
-                      onChange={(e) =>
-                        handleSetChange(exIndex, setIndex, 'reps', e.target.value)
-                      }
-                      style={{ width: '60px' }}
+                      value={s.reps}
+                      onChange={(e) => handleSetChange(exIndex, setIndex, 'reps', e.target.value)}
+                    />
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <input
+                      type="number"
+                      value={s.weight_lbs}
+                      onChange={(e) => handleSetChange(exIndex, setIndex, 'weight_lbs', e.target.value)}
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      value={setObj.weight_lbs}
-                      onChange={(e) =>
-                        handleSetChange(
-                          exIndex,
-                          setIndex,
-                          'weight_lbs',
-                          e.target.value
-                        )
-                      }
-                      style={{ width: '60px' }}
-                    />
-                  </td>
-                  <td>
-                    <button onClick={() => handleRemoveSet(exIndex, setIndex)}>
-                      X
-                    </button>
+                    <button onClick={() => handleRemoveSet(exIndex, setIndex)}>X</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-
-          <button onClick={() => handleAddSet(exIndex)} style={{ marginTop: '0.5rem' }}>
-            + Add Set
-          </button>
+          <button onClick={() => handleAddSet(exIndex)}>+ Add Set</button>
         </div>
       ))}
 
-      {/* Action Buttons */}
-      <div style={{ marginTop: '1.5rem' }}>
-        <button onClick={handleSaveWorkout}>
-          {currentWorkoutId ? 'Edit Workout' : 'Save Workout'}
-        </button>
+      <div style={{ marginTop: '1rem' }}>
+        <button onClick={handleSaveWorkout}>Save Workout</button>
         {currentWorkoutId && (
-          <button
-            onClick={handleDeleteWorkout}
-            style={{ marginLeft: '1rem', color: 'red' }}
-          >
+          <button onClick={handleDeleteWorkout} style={{ marginLeft: '1rem', color: 'red' }}>
             Delete Workout
           </button>
         )}
       </div>
     </div>
   );
-}
+});
 
 export default LogWorkout;
