@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import LogWorkout from './components/LogWorkout';
 import WorkoutHistory from './components/WorkoutHistory';
+import Report from './components/Report';
 
 function App() {
   // Reference "WorkoutHistory" and "LogWorkout" so we can trigger a refresh after making changes
@@ -27,6 +28,7 @@ function App() {
       <h1>Fitness App</h1>
       <LogWorkout ref={logWorkoutRef} onWorkoutSaved={handleWorkoutSaved} />   
       <WorkoutHistory ref={historyRef} onEditWorkoutTriggered={handleEditWorkoutTriggered} />
+      <Report />
     </div>
   );
 }
