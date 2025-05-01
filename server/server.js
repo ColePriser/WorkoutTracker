@@ -176,6 +176,7 @@ app.post('/api/workouts', async (req, res) => {
       const startDate = new Date(start);
       const endDate = new Date(end);
       endDate.setHours(23, 59, 59, 999); // Set end date to the end of the day
+      const exObjectId = new mongoose.Types.ObjectId(exerciseId.trim());
 
     /* Use prepared statement to fetch data
     * 1. Match workouts within the date range
@@ -186,33 +187,36 @@ app.post('/api/workouts', async (req, res) => {
     * 6. Return the aggregated data
     */
     const workouts = [
-      {
-        $match: {
-          workout_date: {
-            $gte: startDate,
-            $lte: endDate,
-          }
+      { $match: { exercise_id: exObjectId } },
+      { $lookup: {
+          from: 'workouts',
+          localField: 'workout_id',
+          foreignField: '_id',
+          as: 'workout'
         }
       },
-      { $unwind: '$exercisesInWorkout' },
-      { $match: { 'exercisesInWorkout.exercise_id': mongoose.Types.ObjectId(exerciseId) } },
-      { $unwind: '$exercisesInWorkout.sets' },
+      { $unwind: '$workout' },
+      { $match: { 
+          'workout.workout_date': { $gte: startDate, $lte: endDate }
+        } 
+      },
       {
         $group: {
-          _id: 0,
+          _id: null,
           totalSets: { $sum: 1 },
-          totalReps: { $sum: '$exercisesInWorkout.sets.reps' },
-          totalVolume: { $sum: { $multiply: ['$exercisesInWorkout.sets.reps', '$exercisesInWorkout.sets.weight_lbs'] } },
-          avgWeight: { $avg: '$exercisesInWorkout.sets.weight_lbs' },
-          maxWeight: { $max: '$exercisesInWorkout.sets.weight_lbs' }
+          totalReps: { $sum: '$reps' },
+          totalVolume: { $sum: { $multiply: ['$reps', '$weight_lbs'] } },
+          avgWeight: { $avg: '$weight_lbs' },
+          maxWeight: { $max: '$weight_lbs' }
         }
       }
     ];
 
-    const reportData = await Workout.aggregate(workouts);
-    if (reportData.length == 0) {
+    const result = await Set.aggregate(workouts);
+
+    // If no exercise matches the given ID, return zero values
+    if (!result.length) {
       return res.json({
-        message: 'No data found for the given exercise and date range.',
         totalSets: 0,
         totalReps: 0,
         totalVolume: 0,
@@ -220,16 +224,8 @@ app.post('/api/workouts', async (req, res) => {
         maxWeight: 0
       });
     }
-
-    const { totalSets, totalReps, totalVolume, avgWeight, maxWeight } = reportData[0];
-    res.json({
-      message: 'Report data fetched successfully!',
-      totalSets,
-      totalReps,
-      totalVolume,
-      avgWeight,
-      maxWeight
-    });
+    res.json(result[0]);
+    
   } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to fetch report data' });
