@@ -14,4 +14,6 @@ const workoutSchema = new Schema({
   },
 });
 
+// Create an index on workout_date for faster queries
+workoutSchema.index({ workout_date: 1}); 
 module.exports = mongoose.model('Workout', workoutSchema);

@@ -26,4 +26,8 @@ const setSchema = new Schema({
   },
 });
 
+// Create an index on exercise_id and workout_id for faster queries
+setSchema.index({ exercise_id: 1 });
+setSchema.index({ workout_id: 1 });
+
 module.exports = mongoose.model('Set', setSchema);
