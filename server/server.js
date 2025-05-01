@@ -1,4 +1,3 @@
-
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -21,7 +20,7 @@ mongoose.connect(uri)
     .then(() => console.log('Connected to MongoDB Atlas'))
     .catch(err => console.error('MongoDB Atlas connection error:', err));
 
-// Return static array of exercises to populate the dropdown in "LogWorkout"
+// GET all Exercises
 app.get('/api/exercises', async (req, res) => {
     try {
       const exercises = await Exercise.find({}).lean();
@@ -32,7 +31,7 @@ app.get('/api/exercises', async (req, res) => {
     }
 });
 
-// Create a new exercise
+// INSERT new Exercise
 app.post('/api/exercises', async (req, res) => {
   try {
     const { exercise_name } = req.body;
@@ -87,7 +86,7 @@ app.get('/api/workouts', async (req, res) => {
   }
 });
 
-// CREATE a Workout + its Sets
+// INSERT new Workout + its Sets
 app.post('/api/workouts', async (req, res) => {
     try {
       const { user_id, workout_date, exercisesInWorkout } = req.body;
@@ -118,7 +117,7 @@ app.post('/api/workouts', async (req, res) => {
     }
   });
   
-  // EDIT a Workout + its Sets
+  // UPDATE a Workout + its Sets
   app.put('/api/workouts/:id', async (req, res) => {
     try {
       const { id } = req.params;
@@ -163,6 +162,77 @@ app.post('/api/workouts', async (req, res) => {
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to delete workout' });
+    }
+  });
+
+  // GET report information
+  app.get('/api/report', async (req, res) => {
+    try {
+      const {exerciseId, start, end } = req.query;
+      // Validate query parameters
+      if (!exerciseId || !start || !end) {
+        return res.status(400).json({ error: 'exerciseId, start, and end are required!' });
+      }
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      endDate.setHours(23, 59, 59, 999); // Set end date to the end of the day
+
+    /* Use prepared statement to fetch data
+    * 1. Match workouts within the date range
+    * 2. Unwind the exercisesInWorkout array
+    * 3. Match the specific exercise ID
+    * 4. Unwind the sets array within each exercise
+    * 5. Group the data to calculate total sets, total reps, total volume, average weight, and max weight
+    * 6. Return the aggregated data
+    */
+    const workouts = [
+      {
+        $match: {
+          workout_date: {
+            $gte: startDate,
+            $lte: endDate,
+          }
+        }
+      },
+      { $unwind: '$exercisesInWorkout' },
+      { $match: { 'exercisesInWorkout.exercise_id': mongoose.Types.ObjectId(exerciseId) } },
+      { $unwind: '$exercisesInWorkout.sets' },
+      {
+        $group: {
+          _id: 0,
+          totalSets: { $sum: 1 },
+          totalReps: { $sum: '$exercisesInWorkout.sets.reps' },
+          totalVolume: { $sum: { $multiply: ['$exercisesInWorkout.sets.reps', '$exercisesInWorkout.sets.weight_lbs'] } },
+          avgWeight: { $avg: '$exercisesInWorkout.sets.weight_lbs' },
+          maxWeight: { $max: '$exercisesInWorkout.sets.weight_lbs' }
+        }
+      }
+    ];
+
+    const reportData = await Workout.aggregate(workouts);
+    if (reportData.length == 0) {
+      return res.json({
+        message: 'No data found for the given exercise and date range.',
+        totalSets: 0,
+        totalReps: 0,
+        totalVolume: 0,
+        avgWeight: 0,
+        maxWeight: 0
+      });
+    }
+
+    const { totalSets, totalReps, totalVolume, avgWeight, maxWeight } = reportData[0];
+    res.json({
+      message: 'Report data fetched successfully!',
+      totalSets,
+      totalReps,
+      totalVolume,
+      avgWeight,
+      maxWeight
+    });
+  } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch report data' });
     }
   });
 
