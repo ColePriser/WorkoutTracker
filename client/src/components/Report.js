@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-function Report() {
+function Report({ exerciseVersion }) {
     const [exercisesList, setExercisesList] = useState([]);
     const [exerciseId, setExerciseId] = useState('');
     const [startDate, setStartDate] = useState('');
@@ -10,7 +10,7 @@ function Report() {
     // Fetch the Exercises from the Server
     useEffect(() => {
         fetchExercises();
-    }, []);
+    }, [exerciseVersion]);
     
     const fetchExercises = () => {
         fetch('http://localhost:5000/api/exercises')

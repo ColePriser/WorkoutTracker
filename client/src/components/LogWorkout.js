@@ -44,9 +44,10 @@ const LogWorkout = forwardRef(function LogWorkout(props, ref) {
       .then((res) => res.json())
       .then((data) => {
         console.log('Exercise created:', data);
-        alert('Exercise "${data.exercise_name}" created!');
+        alert(`Exercise "${data.exercise_name}" created!`);
         fetchExercises();
         // reset the form
+        if (props.onExerciseAdded) props.onExerciseAdded(); // refresh exercise list
         setShowExerciseForm(false);
         setNewExerciseName('');
       })
